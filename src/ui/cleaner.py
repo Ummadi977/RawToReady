@@ -257,7 +257,11 @@ def render_clean():
                         key=_fb_key,
                         placeholder="e.g. 'numeric column still has commas'",
                     )
-                    if st.button("↺ Re-run with feedback", use_container_width=True) and _fb:
+                    if st.button(
+                        "↺ Re-run with feedback",
+                        use_container_width=True,
+                        disabled=not _fb or bool(clean.running),
+                    ) and _fb:
                         st.session_state["clean_all_done"] = False
                         st.session_state["clean_fb_counter"] = (
                             st.session_state.get("clean_fb_counter", 0) + 1

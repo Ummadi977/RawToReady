@@ -523,15 +523,20 @@ def stream_cleaner(
     processed_dir = str(_abs(f"data/processed/{output_dir}"))
     script_path = str(_abs(script_path or _random_script(output_dir, "clean")))
     if feedback:
-        # Re-run with feedback: work from the already-cleaned processed files, not interim
+        # Re-run with feedback: patch the existing script, re-run it from interim
         task = (
-            f"Current processed CSVs directory (already cleaned once): {processed_dir}\n"
+            f"Existing cleaning script: {script_path}\n"
+            f"Interim CSVs directory: {interim_dir}\n"
             f"Output (processed) directory: {processed_dir}\n"
-            f"Script path: {script_path}\n"
             f"Description: {description}\n"
             f"\nUser feedback on the previous result: {feedback}\n"
-            "Read the existing processed CSV(s), apply the corrections described in the feedback, "
-            "and overwrite them in place. Do NOT go back to the interim directory."
+            "Steps:\n"
+            "1. Use read_file to read the existing cleaning script.\n"
+            "2. Make the minimal changes needed to fix the feedback — do NOT rewrite the whole script.\n"
+            "3. Save the updated script with write_file (same path).\n"
+            "4. Run it with run_script — it must read from the interim directory and write to the output directory.\n"
+            "5. Verify the output file exists with read_file.\n"
+            "Do not start from scratch — only fix what the feedback describes."
         )
     else:
         task = (

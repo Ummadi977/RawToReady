@@ -83,20 +83,20 @@ st.caption("Scrape public data → Extract tables → Clean & normalize → Vali
 # ── Step progress indicator ────────────────────────────────────────────────────
 
 STEPS = ["Scrape", "Extract", "Clean", "Validate"]
+STEP_RESULTS = ["scrape_result", "extract_result", "clean_result", "validate_result"]
 current = st.session_state.step
 
 cols = st.columns(len(STEPS))
 for i, (col, label) in enumerate(zip(cols, STEPS), start=1):
-    if i < current:
-        if col.button(f"✅ {i}. {label}", key=f"nav_{i}", use_container_width=True):
-            st.session_state.step = i
-            st.rerun()
-    elif i == current:
+    if i == current:
         col.button(f"▶ {i}. {label}", key=f"nav_{i}", use_container_width=True,
                    type="primary", disabled=True)
     else:
-        col.button(f"○ {i}. {label}", key=f"nav_{i}", use_container_width=True,
-                   disabled=True)
+        _res = st.session_state.get(STEP_RESULTS[i - 1])
+        icon = "✅" if (_res and _res.success) else "○"
+        if col.button(f"{icon} {i}. {label}", key=f"nav_{i}", use_container_width=True):
+            st.session_state.step = i
+            st.rerun()
 
 st.divider()
 
@@ -110,59 +110,6 @@ elif current == 3:
     render_clean()
 elif current == 4:
     render_validate()
-
-# ── Further transformations (chat — shown from step 3 onwards) ─────────────────
-
-if current >= 3:
-    st.divider()
-    st.subheader("Further transformations")
-    st.caption(
-        "Describe any change to the cleaned data — "
-        "e.g. *melt year columns into rows*, *rename X to Y*, *pivot by category*, *drop column Z*"
-    )
-
-    _chat_dir = st.session_state.get("_clean_out", "") or st.session_state.output_dir
-
-    if not _chat_dir:
-        _chat_dir = st.text_input("Dataset name", placeholder="e.g. annual", key="_chat_dir_input")
-
-    if _chat_dir:
-        for _msg in st.session_state.clean_chat_history:
-            with st.chat_message(_msg["role"]):
-                st.markdown(_msg["content"])
-
-        if _user_chat := st.chat_input("What transformation do you want to apply?"):
-            st.session_state.clean_chat_history.append({"role": "user", "content": _user_chat})
-
-            from dataflow_agents.runner import stream_chat_cleaner
-            _chat_result = None
-            with st.status("Applying transformation…", expanded=True) as _chat_status:
-                for _et, _ct in stream_chat_cleaner(output_dir=_chat_dir, user_message=_user_chat):
-                    if _et == "tool_call":
-                        st.markdown(f"&nbsp;&nbsp;`{_ct}`")
-                    elif _et == "tool_result":
-                        st.caption(f"&nbsp;&nbsp;{_ct}")
-                    elif _et == "thought":
-                        st.markdown(_ct)
-                    elif _et == "error":
-                        st.error(_ct)
-                    elif _et == "result":
-                        _chat_result = _ct
-                        st.session_state.clean_result = _ct
-
-                _ok = _chat_result and _chat_result.success
-                _chat_status.update(
-                    label="Transformation applied ✓" if _ok else "Transformation failed",
-                    state="complete" if _ok else "error",
-                    expanded=not _ok,
-                )
-
-            _reply = (
-                f"Applied. {len(_chat_result.files)} file(s) updated in `data/processed/{_chat_dir}/`."
-                if _ok else "Transformation failed — see agent log above."
-            )
-            st.session_state.clean_chat_history.append({"role": "assistant", "content": _reply})
-            st.rerun()
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 
@@ -196,7 +143,3 @@ with st.sidebar:
     st.markdown(f"**Provider:** {provider}")
     st.markdown(f"**Model:** `{settings.dataflow_model}`")
 
-    st.divider()
-    if st.button("🗑 Clear chat history", use_container_width=True):
-        st.session_state.clean_chat_history = []
-        st.rerun()
