@@ -522,6 +522,7 @@ def stream_cleaner(
     interim_dir = str(_abs(f"data/interim/{output_dir}"))
     processed_dir = str(_abs(f"data/processed/{output_dir}"))
     script_path = str(_abs(script_path or _random_script(output_dir, "clean")))
+    yield ("script_path", script_path)
     if feedback:
         # Re-run with feedback: patch the existing script, re-run it from interim
         task = (

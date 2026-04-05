@@ -149,6 +149,39 @@ def render_clean():
             key="_clean_script",
         )
 
+    # ── Manual script editor ──────────────────────────────────────────────────
+    _script_abs = PROJECT_ROOT / (st.session_state.clean_script or "") if st.session_state.clean_script else None
+    if _script_abs and _script_abs.exists():
+        with st.expander("📝 Edit & run script manually"):
+            _script_content = _script_abs.read_text()
+            _edited = st.text_area(
+                "Script source",
+                value=_script_content,
+                height=300,
+                key="_manual_script_editor",
+            )
+            _save_col, _run_col2 = st.columns([1, 1])
+            with _save_col:
+                if st.button("💾 Save changes", use_container_width=True):
+                    _script_abs.write_text(_edited)
+                    st.success("Saved.")
+            with _run_col2:
+                if st.button("▶ Run script now", use_container_width=True, disabled=bool(clean.running)):
+                    _script_abs.write_text(_edited)
+                    import subprocess as _sp
+                    with st.spinner("Running script…"):
+                        _proc = _sp.run(
+                            ["python3", str(_script_abs)],
+                            capture_output=True, text=True,
+                        )
+                    if _proc.returncode == 0:
+                        st.success("Script ran successfully.")
+                        if _proc.stdout:
+                            st.code(_proc.stdout[:3000])
+                    else:
+                        st.error("Script failed.")
+                        st.code(_proc.stderr[:3000])
+
     run_col, stop_col, _ = st.columns([1, 1, 2])
     with run_col:
         run_test = st.button(
@@ -214,7 +247,7 @@ def render_clean():
         _drain_and_render("clean", _running_lbl, _done_lbl, "Cleaning stopped / failed",
                           on_complete=_on_complete)
 
-    if clean.result is not None:
+    if clean.result is not None and not clean.running:
         if not clean.result.success:
             st.error(f"Cleaning failed.\n\n{clean.result.error}")
             with st.expander("🤖 Agent log", expanded=False):

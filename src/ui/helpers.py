@@ -45,11 +45,12 @@ def _start_bg(step: str, runner_fn, **runner_kwargs):
 
     q    = _q.Queue()
     stop = _t.Event()
-    st.session_state[f"{step}_queue"]   = q
-    st.session_state[f"{step}_stop"]    = stop
-    st.session_state[f"{step}_running"] = True
-    st.session_state[f"{step}_result"]  = None
-    st.session_state[f"{step}_events"]  = []
+    st.session_state[f"{step}_queue"]     = q
+    st.session_state[f"{step}_stop"]      = stop
+    st.session_state[f"{step}_running"]   = True
+    st.session_state[f"{step}_result"]    = None
+    st.session_state[f"{step}_events"]    = []
+    st.session_state[f"{step}_just_done"] = False
 
     def _bg():
         try:
@@ -82,13 +83,17 @@ def _drain_and_render(
                 break
             if ev is None:
                 st.session_state[f"{step}_running"] = False
+                st.session_state[f"{step}_just_done"] = True
                 if on_complete:
                     on_complete()
                 break
             et, content = ev
             if et == "result":
                 st.session_state[f"{step}_result"] = content
-            st.session_state[f"{step}_events"].append((et, content))
+            elif et == "script_path":
+                st.session_state[f"{step}_script"] = content
+            else:
+                st.session_state[f"{step}_events"].append((et, content))
 
     result  = st.session_state.get(f"{step}_result")
     running = st.session_state[f"{step}_running"]
@@ -117,6 +122,9 @@ def _drain_and_render(
 
     if running:
         time.sleep(0.4)
+        st.rerun()
+    elif st.session_state.pop(f"{step}_just_done", False):
+        # Agent just finished this cycle — rerun once so preview renders in a clean cycle
         st.rerun()
 
 

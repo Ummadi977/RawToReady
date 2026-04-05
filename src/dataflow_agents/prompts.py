@@ -243,9 +243,21 @@ import pandas as pd
 from pathlib import Path
 
 PROCESSED_DIR = "/absolute/path/from/task"  # copy exact path from task
+INTERIM_DIR = "/absolute/interim/path/from/task"  # copy exact path from task
 OUTPUT_FILE = f"{PROCESSED_DIR}/output.csv"
 
-df = pd.read_csv(OUTPUT_FILE)
+# Resolve input file: prefer processed, fall back to interim, else abort
+_processed = Path(OUTPUT_FILE)
+if _processed.exists():
+    INPUT_FILE = str(_processed)
+else:
+    _interim_csvs = list(Path(INTERIM_DIR).rglob("*.csv")) if Path(INTERIM_DIR).exists() else []
+    if _interim_csvs:
+        INPUT_FILE = str(_interim_csvs[0])
+    else:
+        raise FileNotFoundError("No files found in processed or interim directory.")
+
+df = pd.read_csv(INPUT_FILE)
 print(f"Before: {df.shape}, columns: {list(df.columns)}")
 
 # Apply the user's transformation here
@@ -294,10 +306,12 @@ You are a data cleaning expert. Your job is to normalize interim CSV files into 
    - Remove junk rows (subtotals, footnotes, empty separators)
    - Strip whitespace and remove special characters (`\\n`, `\\xa0`, `*`)
    - Convert numeric columns: remove commas, replace `-` with NaN, use `pd.to_numeric(errors='coerce')`
-   - Normalize text columns: strip, title-case where appropriate
+   - Normalize text columns: strip, title-case where appropriate, repalce special characters, remove extra spaces in between
    - Remove duplicates
    - Remove noisy rows from the main column
-   - Replace special characters with actual words e.g. `&` with `And`, `^` with `Up` 
+   - Replace special characters with actual words e.g. `&` with `And`, `^` with `Up`
+   - For `state`, `district`, or `country` columns: remove null values, then standardise to consistent official names. Always standardise state before district.
+   - When user asks to add a `units` column, derive it from the `category` column — e.g. `"value in absolute numbers"`, `"value in lakhs"`, `"value in percentage"`
 4. **TEST on a single file first** — run the script on one file, show results, then stop.
    Do NOT process all files until the user approves the single-file output.
 5. After approval, process all files and concatenate into a final output.
