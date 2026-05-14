@@ -120,20 +120,60 @@ for file in os.listdir(parent_folder):
 
 ## Extraction Strategy
 
-### Method: `stream` (for borderless tables)
-Use camelot with:
-- `flavor="stream"`
-- `row_tol=10`
-- `table_areas=["0,800,800,0"]`
+**Extraction order: Docling → camelot → pdfplumber.**
 
-### Method: `lattice` (for bordered tables)
-Use camelot with:
-- `flavor="lattice"`
-- `strip_text=".\n"`
-- `line_scale=20`
+Always try Docling first. Fall back to camelot if Docling produces empty or poor results. Fall back to pdfplumber only if both Docling and camelot fail.
 
-### Method: `auto`
-Try `lattice` first, fall back to `stream` if results are poor.
+### Primary — Docling (ML-based, handles complex tables)
+Always try Docling first. It handles merged cells, multi-column headers, and scanned PDFs:
+```python
+from docling.document_converter import DocumentConverter
+
+converter = DocumentConverter()
+result = converter.convert(str(pdf_file))
+tables = [t.export_to_dataframe() for t in result.document.tables]
+# tables is a list of DataFrames — empty list means no tables found
+```
+A result is considered **good** if at least one DataFrame has >0 data rows and >1 column.
+
+### Fallback 1 — camelot (when Docling finds no tables or all-empty results)
+
+#### Method: `stream` (for borderless tables)
+```python
+import camelot
+tables = camelot.read_pdf(str(pdf_file), pages="all", flavor="stream", row_tol=10, table_areas=["0,800,800,0"])
+```
+
+#### Method: `lattice` (for bordered tables)
+```python
+tables = camelot.read_pdf(str(pdf_file), pages="all", flavor="lattice", strip_text=".\n", line_scale=20)
+```
+
+#### Method: `auto`
+Try `lattice` first; if `tables.n == 0`, try `stream`.
+
+### Fallback 2 — pdfplumber (when both Docling and camelot fail)
+```python
+import pdfplumber
+with pdfplumber.open(pdf_file) as pdf:
+    for i, page in enumerate(pdf.pages, 1):
+        table = page.extract_table()
+        if table:
+            df = pd.DataFrame(table[1:], columns=table[0])
+            df = df.replace(r'\n', '', regex=True)
+            # save as usual
+```
+
+### Extraction Verification
+After running the script, **always verify the output**:
+1. List all CSVs created under `data/interim/[output folder]/`
+2. For each CSV, print shape `(rows, cols)` and the first 3 rows
+3. Flag any file that has:
+   - 0 data rows (header-only)
+   - All-null columns
+   - Fewer columns than expected (likely a parse failure)
+4. If a file fails verification, re-run that PDF with the fallback method and replace the output
+5. Report a summary: total PDFs processed, total tables extracted, any failures and how they were resolved
 
 ## Output Format
 
@@ -159,8 +199,9 @@ When given an extraction task:
    - For each year folder, **check for matching Excel files first** — if found, use Excel and skip PDF extraction for that folder
    - Only fall back to PDF/camelot extraction when no Excel file is present
 4. **Run the script** to extract tables
-5. **Verify output** — check that CSVs were created in `data/interim/[output folder]/`
-6. **Report results** — list extracted files and any issues
+5. **Verify output** — for every CSV created, check shape and first 3 rows; flag failures (0 rows, all-null, wrong column count)
+6. **Fix failures** — re-run failed PDFs progressing through the fallback chain (Docling → camelot → pdfplumber) and overwrite the bad CSV
+7. **Report results** — total PDFs processed, total tables extracted, which method succeeded per file, any unresolved failures
 
 ## Key Implementation Details
 
