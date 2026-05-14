@@ -48,3 +48,8 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
